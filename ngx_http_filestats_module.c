@@ -10,6 +10,7 @@
 #include <ngx_http.h>
 
 #define INTSIZE 254 
+#define FILESTATS_STAT_ADDRESS(size2time,time,maxtime) (((u_char*)filestats_data->data)+size2time*maxtime*sizeof(ngx_uint_t)+(time+1)*sizeof(ngx_uint_t))
 
 const char HTML[] =
 		"<!DOCTYPE HTML PUBLIC \\\"-//W3C//DTD HTML 4.01 Transitional//EN\\\">\n"
@@ -49,12 +50,12 @@ const char HTML[] =
 		"            .cellDisabled\n"
 		"            {\n"
 		"                border-color: black;\n"
-		"                color: #A8A8A8;\n"
+//		"                color: #FFFFFF;\n"
 		"            }\n"
 		"\n"
 		"            .cellNoLastFail\n"
 		"            {\n"
-		"                color: #EEEEEE;\n"
+//		"                color: #FFFFFF;\n"
 		"            }\n"
 		"\n"
 		"            .cellUpstream\n"
@@ -73,7 +74,7 @@ const char HTML[] =
 		"\n"
 		"            .cellImplicitUpstream\n"
 		"            {\n"
-		"                color: #FFFFFF;\n"
+//		"                color: #FFFFFF;\n"
 		"            }\n"
 		"\n"
 		"            .cellSortAsc\n"
@@ -107,7 +108,8 @@ const char HTML[] =
 		"            .up\n"
 		"            {\n"
 		"                border: 1px outset;\n"
-		"                color: #AAAAAA;\n"
+		//"                color: #AAAAAA;\n"
+//		"                color: #FFFFFF;\n"
 		"            }\n"
 		"        </style>\n"
 		"\n"
@@ -547,19 +549,19 @@ const char HTML[] =
  * Shared memory used to store statistics
  */
 ngx_shm_zone_t * filestats_data = NULL;
-//ngx_http_filestats_loc_conf_t * filestats_conf = NULL;
+
 static size_t filestats_data_size = 0;
 
 typedef struct
 {
-    time_t times;
+    ngx_time_t times;
     ngx_uint_t len;
     ngx_uint_t count;
 } ngx_http_filestats_timeouts_t;
 
 typedef struct
 {
-    size_t size;
+    ssize_t size;
     ngx_uint_t strsize;
     ngx_list_t timeouts;
 } ngx_http_filestats_time2size_t;
@@ -577,6 +579,7 @@ typedef struct
     ngx_uint_t refresh_interval;
     ngx_list_t size2time;
 } ngx_http_filestats_loc_conf_t;
+ngx_http_filestats_loc_conf_t * filestats_conf = NULL;
 
 
 static void * ngx_http_filestats_create_loc_conf(ngx_conf_t *cf);
@@ -671,7 +674,7 @@ ngx_http_module_t  ngx_http_filestats_module_ctx =
     NULL,                                  /* merge server configuration */
 
     ngx_http_filestats_create_loc_conf,    /* create location configuration */
-    ngx_http_filestats_merge_loc_conf      /* merge location configuration */
+    ngx_http_filestats_merge_loc_conf,      /* merge location configuration */
 };
 
 
@@ -761,7 +764,7 @@ static ngx_int_t ngx_http_filestats_init_shm(ngx_shm_zone_t * shm_zone, void * d
 {
 	if (data)
 	{
-        ngx_conf_log_error(NGX_LOG_EMERG, 0, 0, "DATA: %s DEBUG_VAGNER", (char *)data);
+//        ngx_conf_log_error(NGX_LOG_EMERG, 0, 0, "DATA: %s DEBUG_VAGNER", (char *)data);
 
 		shm_zone->data = data;
 		return NGX_OK;
@@ -802,7 +805,7 @@ static char *ngx_http_filestats_get_sizes(ngx_conf_t *cf, ngx_command_t *cmd, vo
 	    list_element->size = ngx_parse_size(&value[i]);
 	}
 
-//	filestats_conf = config;
+	filestats_conf = config;
 
 	/*part = &config->size2time.part;
 	data = part->elts;
@@ -861,7 +864,8 @@ static char *ngx_http_filestats_get_times(ngx_conf_t *cf, ngx_command_t *cmd, vo
 		    list_element = ngx_list_push(&data[i].timeouts);
 		    if (list_element == NULL)
 			    return "filestats: Error push to size2time list";
-		    list_element->times = ngx_atoi(value[ii].data, value[ii].len);
+		    list_element->times.msec = ngx_atoi(value[ii].data, value[ii].len);
+		    list_element->count = 0;
 		    list_element->len = value[ii].len;
 //		    list_element->count = 0;
 //		    uncomment this for debug		    
@@ -1153,7 +1157,8 @@ static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * 
 			if (k==1)
 			    b->last = ngx_sprintf(b->last, "0,0,");	
 			if (k < (part_times->nelts-1))
-			    b->last = ngx_sprintf(b->last, "%d,", data_times[k].count);
+			    //b->last = ngx_sprintf(b->last, "%d,", data_times[k].count);
+			    b->last = ngx_sprintf(b->last, "%d,", *(ngx_uint_t*)FILESTATS_STAT_ADDRESS(i,k,part_times->nelts));	
 			else
 			    b->last = ngx_sprintf(b->last, "%d]", data_times[k].count);
                 }
@@ -1206,9 +1211,9 @@ static ngx_buf_t * ngx_http_filestats_create_response_html(ngx_http_request_t * 
 			i = 0;
 		}
 		if (i==0)
-		    sprintf(tmpstring, "\"< %d msec.\"", (int)data_times[i].times);
+		    sprintf(tmpstring, "\"< %d msec.\"", (int)data_times[i].times.msec);
 		else
-		    sprintf(tmpstring, ",\"< %d msec.\"", (int)data_times[i].times);
+		    sprintf(tmpstring, ",\"< %d msec.\"", (int)data_times[i].times.msec);
 		    	
 		strcat(buf3, tmpstring);
 		ngx_memset(tmpstring, 0, 8);
@@ -1231,28 +1236,54 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 	ngx_list_part_t * part_times;
 	ngx_http_filestats_time2size_t * data_size2time;
 	ngx_http_filestats_timeouts_t * data_times;
-        unsigned i;
-        unsigned k;
+        ngx_uint_t i,k;
 	ngx_time_t  *tp;
 	ngx_msec_int_t   ms;
 	tp = ngx_timeofday();
-	ngx_http_filestats_loc_conf_t * uslc = ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
+	ngx_http_filestats_loc_conf_t * uslc = filestats_conf;//ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
 	part_size2time = &uslc->size2time.part;
 	data_size2time = part_size2time->elts;
-        for (i = 0; i < part_size2time->nelts; ++i)
-        {
-		if ( r->connection->sent <= (ngx_int_t)data_size2time[i].size )
+
+	for (i = 0 ;;i++) {
+
+		if (i >= part_size2time->nelts) {
+			if (part_size2time->next == NULL) {
+				break;
+			}
+
+			part_size2time = part_size2time->next;
+			data_size2time = part_size2time->elts;
+			i = 0;
+		}
+
+
+
+
+		if ( r->connection->sent <= data_size2time[i].size )
 		{
+
 		    part_times = &data_size2time[i].timeouts.part;
 		    data_times = part_times->elts;
 
-		    data_times[4].count = part_times->nelts;
-		    for (k = 0; k < (part_times->nelts); ++k)
-		    {
+		    for (k = 0 ;;k++) {
+
+
+			if (k >= part_times->nelts) {
+			    if (part_times->next == NULL) {
+				break;
+			    }
+
+			    part_times = part_times->next;
+			    data_times = part_times->elts;
+			    k = 0;
+			}
 			ms = (ngx_msec_int_t)((tp->sec - r->start_sec) * 1000 + (tp->msec - r->start_msec));
 			ms = ngx_max(ms, 0);
-			if ( (unsigned)ms/1000 <= (unsigned)data_times[k].times )    
+
+			if ( ms <= (unsigned)data_times[k].times.msec )    
 			{
+			    if (filestats_data)
+				    ngx_atomic_fetch_add((ngx_uint_t*)FILESTATS_STAT_ADDRESS(i,k,part_times->nelts), 1);
 			    data_times[k].count++;
 			    break;
 			};
