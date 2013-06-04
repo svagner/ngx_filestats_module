@@ -4,4 +4,3 @@ HTTP_AUX_FILTER_MODULES="$HTTP_AUX_FILTER_MODULES ngx_http_filestats_module"
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_filestats_module.c"
 
 have=NGX_HAVE_FILESTATS_MODULE . auto/have
-have=NGX_HAVE_USTATS_MODULE . auto/have

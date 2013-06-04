@@ -10,7 +10,7 @@
 #include <ngx_http.h>
 
 #define INTSIZE 254 
-#define FILESTATS_STAT_ADDRESS(size2time,time,maxtime) (((u_char*)filestats_data->data)+size2time*maxtime*sizeof(ngx_uint_t)+(time+1)*sizeof(ngx_uint_t))
+#define FILESTATS_STAT_ADDRESS(size2time,time,maxtime) (((u_char*)filestats_data->data) + sizeof(ngx_uint_t) + (size2time*maxtime*sizeof(ngx_uint_t)) + ((time+1)*sizeof(ngx_uint_t)))
 
 const char HTML[] =
 		"<!DOCTYPE HTML PUBLIC \\\"-//W3C//DTD HTML 4.01 Transitional//EN\\\">\n"
@@ -573,6 +573,7 @@ typedef struct
      * Less or equal 100 - percent value, greater than 100 - pixel value.
      * 70 by default.
      */
+    ngx_uint_t is_reload;	
     ngx_uint_t html_table_width;
     ngx_uint_t html_table_height;
     /** Page refresh interval, milliseconds. 5000 by default */
@@ -710,11 +711,6 @@ static void * ngx_http_filestats_create_loc_conf(ngx_conf_t *cf)
     conf->html_table_width = NGX_CONF_UNSET_UINT;
     conf->html_table_height = NGX_CONF_UNSET_UINT;
     conf->refresh_interval = NGX_CONF_UNSET_UINT;
-//    conf->filesize.num = 0;
-    //conf->timeouts.num = 0;
-//    if (ngx_list_init(&conf->size2time, cf->pool, 5, sizeof(ngx_http_filestats_time2size_t)) == NGX_ERROR)
-//    if (ngx_list_init(&conf->size2time, (ngx_pool_t *)filestats_data->shm.addr, 5, sizeof(ngx_http_filestats_time2size_t)) == NGX_ERROR)
-//		    return "filestats: Error mapping filestats list";
 
     return conf;
 }
@@ -733,6 +729,7 @@ static char* ngx_http_filestats_merge_loc_conf(ngx_conf_t *cf, void *parent, voi
     ngx_conf_merge_uint_value(conf->html_table_width, prev->html_table_width, 70);
     ngx_conf_merge_uint_value(conf->html_table_height, prev->html_table_height, 70);
     ngx_conf_merge_uint_value(conf->refresh_interval, prev->refresh_interval, 5000);
+    ngx_conf_merge_uint_value(conf->is_reload, prev->is_reload, 1);
 
     if (conf->html_table_width < 1)
     {
@@ -764,7 +761,7 @@ static ngx_int_t ngx_http_filestats_init_shm(ngx_shm_zone_t * shm_zone, void * d
 {
 	if (data)
 	{
-//        ngx_conf_log_error(NGX_LOG_EMERG, 0, 0, "DATA: %s DEBUG_VAGNER", (char *)data);
+
 
 		shm_zone->data = data;
 		return NGX_OK;
@@ -781,11 +778,11 @@ static ngx_int_t ngx_http_filestats_init_shm(ngx_shm_zone_t * shm_zone, void * d
 	return NGX_OK;
 }
 
-
 /*****************************************************************************/
 /*****************************************************************************/
 static char *ngx_http_filestats_get_sizes(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
+
 	ngx_http_filestats_loc_conf_t  *config = (ngx_http_filestats_loc_conf_t *)conf;
 	ngx_str_t *value;
 	ngx_int_t  num;
@@ -806,22 +803,7 @@ static char *ngx_http_filestats_get_sizes(ngx_conf_t *cf, ngx_command_t *cmd, vo
 	}
 
 	filestats_conf = config;
-
-	/*part = &config->size2time.part;
-	data = part->elts;
-
-	for (i = 0 ;;i++) {
-		if (i >= part->nelts) {
-			if (part->next == NULL) {
-				break;
-			}
-
-			part = part->next;
-			data = part->elts;
-			i = 0;
-		}
-	    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "filestats: nelts: %d SIZES: %d", part->nelts, data[i].size);
-	};*/
+    filestats_conf->is_reload=1;
 
 	return NGX_OK;
 };
@@ -840,11 +822,9 @@ static char *ngx_http_filestats_get_times(ngx_conf_t *cf, ngx_command_t *cmd, vo
 	ngx_list_part_t *part;
 	unsigned int i, ii;
 	ngx_http_filestats_time2size_t * data;
-//	ngx_http_filestats_timeouts_t *timedata;
 
 	part = &config->size2time.part;
 	data = part->elts;
-//        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "DATA: %p DEBUG_VAGNER", filestats_data);
 
 	for (i = 0 ;;i++) {
 		if (i >= part->nelts) {
@@ -857,7 +837,6 @@ static char *ngx_http_filestats_get_times(ngx_conf_t *cf, ngx_command_t *cmd, vo
 			i = 0;
 		}
 	    if (ngx_list_init(&data[i].timeouts, cf->pool, 15, sizeof(ngx_http_filestats_timeouts_t)) == NGX_ERROR)
-	    //if (ngx_list_init(&data[i].timeouts, (ngx_pool_t *)filestats_data->shm.addr, 15, sizeof(ngx_http_filestats_timeouts_t)) == NGX_ERROR)
 	        return "filestats: Error mapping filestats timeouts list";
 	    for (ii=1; ii<num; ii++)
 	    {
@@ -867,13 +846,7 @@ static char *ngx_http_filestats_get_times(ngx_conf_t *cf, ngx_command_t *cmd, vo
 		    list_element->times.msec = ngx_atoi(value[ii].data, value[ii].len);
 		    list_element->count = 0;
 		    list_element->len = value[ii].len;
-//		    list_element->count = 0;
-//		    uncomment this for debug		    
-//		    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "filestats: TIMES: %d", list_element->times);
 	    }
-//	    uncomment this for debug		    
-//	    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "filestats: nelts: %d SIZES: %d", part->nelts, data[i].size);
-
 	};
 	return NGX_OK;
 }
@@ -884,8 +857,9 @@ static char *ngx_http_filestats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_core_loc_conf_t  *clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
 
-    clcf->handler = ngx_http_filestats_handler;
 
+
+    clcf->handler = ngx_http_filestats_handler;
 
     if (cf->args->nelts == 1)
     {
@@ -924,7 +898,7 @@ static char *ngx_http_filestats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     	return NGX_CONF_ERROR;
     }
 
-    if (size < (int)ngx_pagesize)
+    if (size < (int)ngx_pagesize && !filestats_data)
 	{
 		ngx_conf_log_error(NGX_LOG_WARN, cf, 0, "filestats: shared memory size must be at least %udB", ngx_pagesize);
 		size = ngx_pagesize;
@@ -950,49 +924,6 @@ static char *ngx_http_filestats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 	filestats_data->init = ngx_http_filestats_init_shm;
 
-/*	ngx_http_filestats_loc_conf_t  *config = (ngx_http_filestats_loc_conf_t *)conf;
-	ngx_list_part_t *part;
-	unsigned int i;
-	ngx_http_filestats_time2size_t * data;
-//	ngx_http_filestats_timeouts_t *timedata;
-	ngx_int_t  num;
-//	ngx_http_filestats_timeouts_t *list_element;
-	num = cf->args->nelts;
-	ngx_str_t *value;
-	value = cf->args->elts;
-
-	part = &config->size2time.part;
-	data = part->elts;
-
-	for (i = 0 ;;i++) {
-		if (i >= part->nelts) {
-			if (part->next == NULL) {
-				break;
-			}
-
-			part = part->next;
-			data = part->elts;
-			i = 0;
-		}
-
-	    if (ngx_list_init(&data[i].timeouts, (ngx_pool_t *)filestats_data, 15, sizeof(ngx_http_filestats_timeouts_t)) == NGX_ERROR)
-	        return "filestats: Error mapping filestats timeouts list";
-	    for (ii=1; ii<num; ii++)
-	    {
-		    list_element = ngx_list_push(&data[i].timeouts);
-		    if (list_element == NULL)
-			    return "filestats: Error push to size2time list";
-		    list_element->times = ngx_atoi(value[ii].data, value[ii].len);
-		    list_element->len = value[ii].len;
-		    list_element->count = 0;
-//		    uncomment this for debug		    
-		    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "filestats: TIMES: %d", list_element->times);
-	    }
-//	    uncomment this for debug		    
-	    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "filestats: nelts: %d SIZES: %d", part->nelts, data[i].size);
-
-	};
-*/
     return NGX_CONF_OK;
 }
 
@@ -1006,7 +937,6 @@ static ngx_int_t ngx_http_filestats_handler(ngx_http_request_t *r)
     ngx_int_t rc;
     ngx_buf_t *b = NULL;
     ngx_chain_t out;
-   // ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
 
 
     if (r->method != NGX_HTTP_GET && r->method != NGX_HTTP_HEAD)
@@ -1044,10 +974,6 @@ static ngx_int_t ngx_http_filestats_handler(ngx_http_request_t *r)
         ngx_str_set(&r->headers_out.content_type, "text/html");
         b = ngx_http_filestats_create_response_html(r);
     }
-    //	send_json = ngx_strncmp(r->args.data, "?json", 5) ? 1 : 0;
-//
-  //  	ngx_str_set(&r->headers_out.content_type, "text/html");
-    //	b = ngx_http_filestats_create_response_html(r);
 
     if (b == NULL)
         return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -1087,7 +1013,6 @@ static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * 
         size_t size = 0;
         ngx_buf_t * b = NULL;
 	char tmpbuf[INTSIZE];
-//        time_t now = ngx_time();
 
         ngx_http_filestats_loc_conf_t * conf = ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
 
@@ -1121,7 +1046,6 @@ static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * 
                         size += sizeof("],\n");
                 }
 
-                // implicit upstream
                 size += sizeof("                ");
                 size += sizeof(ngx_uint_t);
 
@@ -1157,7 +1081,6 @@ static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * 
 			if (k==1)
 			    b->last = ngx_sprintf(b->last, "0,0,");	
 			if (k < (part_times->nelts-1))
-			    //b->last = ngx_sprintf(b->last, "%d,", data_times[k].count);
 			    b->last = ngx_sprintf(b->last, "%d,", *(ngx_uint_t*)FILESTATS_STAT_ADDRESS(i,k,part_times->nelts));	
 			else
 			    b->last = ngx_sprintf(b->last, "%d]", data_times[k].count);
@@ -1240,9 +1163,15 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 	ngx_time_t  *tp;
 	ngx_msec_int_t   ms;
 	tp = ngx_timeofday();
-	ngx_http_filestats_loc_conf_t * uslc = filestats_conf;//ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
+	ngx_http_filestats_loc_conf_t * uslc = filestats_conf;
 	part_size2time = &uslc->size2time.part;
 	data_size2time = part_size2time->elts;
+
+	if (uslc->is_reload)
+	{
+		ngx_memset(filestats_data->data,0, filestats_data_size);
+		uslc->is_reload=0;
+	}
 
 	for (i = 0 ;;i++) {
 
@@ -1255,9 +1184,6 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 			data_size2time = part_size2time->elts;
 			i = 0;
 		}
-
-
-
 
 		if ( r->connection->sent <= data_size2time[i].size )
 		{
@@ -1284,7 +1210,6 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 			{
 			    if (filestats_data)
 				    ngx_atomic_fetch_add((ngx_uint_t*)FILESTATS_STAT_ADDRESS(i,k,part_times->nelts), 1);
-			    data_times[k].count++;
 			    break;
 			};
 		    }
