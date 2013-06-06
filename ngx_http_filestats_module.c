@@ -1167,11 +1167,11 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 	part_size2time = &uslc->size2time.part;
 	data_size2time = part_size2time->elts;
 
-	if (uslc->is_reload)
+/*	if (uslc->is_reload)
 	{
 		ngx_memset(filestats_data->data,0, filestats_data_size);
 		uslc->is_reload=0;
-	}
+	}*/
 
 	for (i = 0 ;;i++) {
 
