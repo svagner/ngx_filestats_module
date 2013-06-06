@@ -12,7 +12,7 @@
 #define INTSIZE 254 
 #define FILESTATS_STAT_ADDRESS(size2time,time,maxtime) (((u_char*)filestats_data->data) + sizeof(ngx_uint_t) + (size2time*maxtime*sizeof(ngx_uint_t)) + ((time+1)*sizeof(ngx_uint_t)))
 
-const char HTML[] =
+const char FILEHTML[] =
 		"<!DOCTYPE HTML PUBLIC \\\"-//W3C//DTD HTML 4.01 Transitional//EN\\\">\n"
 		"<html xmlns=\\\"http://www.w3.org/1999/xhtml\\\">\n"
 		"    <head>\n"
@@ -1103,7 +1103,7 @@ static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * 
 static ngx_buf_t * ngx_http_filestats_create_response_html(ngx_http_request_t * r)
 {
 	unsigned int i;
-	size_t size = sizeof(HTML) + 3 * sizeof("0000000"); /* table width, height and update timer */
+	size_t size = sizeof(FILEHTML) + 3 * sizeof("0000000"); /* table width, height and update timer */
 	ngx_buf_t * b = ngx_create_temp_buf(r->pool, size);
 
 	ngx_http_filestats_loc_conf_t * uslc = ngx_http_get_module_loc_conf(r, ngx_http_filestats_module);
@@ -1147,7 +1147,7 @@ static ngx_buf_t * ngx_http_filestats_create_response_html(ngx_http_request_t * 
 	ngx_sprintf((u_char*)buf2, "%d%s", uslc->html_table_width,
 			uslc->html_table_height <= 100 ? "%" : "");
 
-	b->last = ngx_sprintf(b->last, HTML, buf1, buf2, uslc->refresh_interval, buf3);
+	b->last = ngx_sprintf(b->last, FILEHTML, buf1, buf2, uslc->refresh_interval, buf3);
 
 	return b;
 }
