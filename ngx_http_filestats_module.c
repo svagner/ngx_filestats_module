@@ -10,6 +10,7 @@
 #include <ngx_http.h>
 
 #define INTSIZE 254 
+#define FILESTATS_STAT_START() (((u_char*)filestats_data->data))
 #define FILESTATS_STAT_ADDRESS(size2time,time,maxtime) (((u_char*)filestats_data->data) + sizeof(ngx_uint_t) + (size2time*maxtime*sizeof(ngx_uint_t)) + ((time+1)*sizeof(ngx_uint_t)))
 
 const char FILEHTML[] =
@@ -573,7 +574,7 @@ typedef struct
      * Less or equal 100 - percent value, greater than 100 - pixel value.
      * 70 by default.
      */
-    ngx_uint_t is_reload;	
+    volatile ngx_uint_t is_reload;	
     ngx_uint_t html_table_width;
     ngx_uint_t html_table_height;
     /** Page refresh interval, milliseconds. 5000 by default */
@@ -598,6 +599,7 @@ static ngx_int_t ngx_http_filestats_handler_pt(ngx_http_request_t *r);
 static ngx_int_t ngx_http_filestats_init(ngx_conf_t *cf);
 
 static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * r);
+static ngx_buf_t * ngx_http_filestats_create_response_reset(ngx_http_request_t * r);
 static ngx_buf_t * ngx_http_filestats_create_response_html(ngx_http_request_t * r);
 
 
@@ -730,6 +732,7 @@ static char* ngx_http_filestats_merge_loc_conf(ngx_conf_t *cf, void *parent, voi
     ngx_conf_merge_uint_value(conf->html_table_height, prev->html_table_height, 70);
     ngx_conf_merge_uint_value(conf->refresh_interval, prev->refresh_interval, 5000);
     ngx_conf_merge_uint_value(conf->is_reload, prev->is_reload, 1);
+
 
     if (conf->html_table_width < 1)
     {
@@ -924,6 +927,7 @@ static char *ngx_http_filestats(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 	filestats_data->init = ngx_http_filestats_init_shm;
 
+
     return NGX_CONF_OK;
 }
 
@@ -959,15 +963,24 @@ static ngx_int_t ngx_http_filestats_handler(ngx_http_request_t *r)
             return rc;
     }
 
-    // Send HTML or simple JSON
+    // Send HTML or simple JSON or reset
     ngx_uint_t send_json = 0;
+    ngx_uint_t reset_stat = 0;
     if (r->args.data)
-        send_json = ngx_strncmp(r->args.data, "?json", 5) ? 1 : 0;
+        reset_stat = ngx_strncmp(r->args.data, "reset", 5) ? 0 : 1;
+
+    if (r->args.data)
+        send_json = ngx_strncmp(r->args.data, "json", 4) ? 0 : 1;
 
     if (send_json)
     {
         ngx_str_set(&r->headers_out.content_type, "text/plain");
         b = ngx_http_filestats_create_response_json(r);
+    }
+    else if (reset_stat)
+    {
+        ngx_str_set(&r->headers_out.content_type, "text/plain");
+        b = ngx_http_filestats_create_response_reset(r);
     }
     else
     {
@@ -1000,6 +1013,25 @@ static ngx_int_t ngx_http_filestats_handler(ngx_http_request_t *r)
 /*****************************************************************************/
 /*****************************************************************************/
 
+static ngx_buf_t * ngx_http_filestats_create_response_reset(ngx_http_request_t * r)
+{
+        size_t size = 0;
+        ngx_buf_t * b = NULL;
+	ngx_slab_pool_t          *shpool;
+
+	shpool = (ngx_slab_pool_t *)filestats_data->shm.addr;
+
+	ngx_shmtx_lock(&shpool->mutex);
+		ngx_memset(filestats_data->data,0, filestats_data_size);
+	ngx_shmtx_unlock(&shpool->mutex);
+        size += sizeof("OK\n");
+
+        b = ngx_create_temp_buf(r->pool, size);
+
+        b->last = ngx_sprintf(b->last, "OK\n");
+
+        return b;
+}
 
 
 static ngx_buf_t * ngx_http_filestats_create_response_json(ngx_http_request_t * r)
@@ -1166,13 +1198,26 @@ ngx_http_filestats_handler_pt(ngx_http_request_t *r)
 	ngx_http_filestats_loc_conf_t * uslc = filestats_conf;
 	part_size2time = &uslc->size2time.part;
 	data_size2time = part_size2time->elts;
+/*	ngx_slab_pool_t          *shpool;
 
-/*	if (uslc->is_reload)
+	shpool = (ngx_slab_pool_t *)filestats_data->shm.addr;
+
+	ngx_shmtx_lock(&shpool->mutex);
+	if (uslc->is_reload)
+	{
+		uslc->is_reload=0;
+		uslc->is_reset=0;
+		if (!*(ngx_uint_t*)FILESTATS_STAT_START())
+		    *(ngx_uint_t*)FILESTATS_STAT_START() = 1;
+	}
+	if (*(ngx_uint_t*)FILESTATS_STAT_START())
 	{
 		ngx_memset(filestats_data->data,0, filestats_data_size);
-		uslc->is_reload=0;
-	}*/
 
+		*(ngx_uint_t*)FILESTATS_STAT_START() = 0;
+	}
+	ngx_shmtx_unlock(&shpool->mutex);
+*/
 	for (i = 0 ;;i++) {
 
 		if (i >= part_size2time->nelts) {
