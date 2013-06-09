@@ -1,9 +1,8 @@
-
 /**
- * Copyright (c) 2010-2012 Aleksey "0xc0dec" Fedotov
- * http://skbkontur.ru
+ * Copyright (c) 2013 Stanislav "vagner" Putrya
+ * merge from ustats module (Copyright (c) 2010-2012 Aleksey "0xc0dec" Fedotov, http://skbkontur.ru) for template
+ * http://bsdway.ru
  */
-
 
 #include <ngx_config.h>
 #include <ngx_core.h>
