@@ -377,7 +377,7 @@ const char FILEHTML[] =
 	"{\n"
 	"	data = eval('(' + data + ')');\n"
 	"\n"
-	"	var headers = [ \"File size/Time\", \"< 5 msec.\",\"< 10 msec.\",\"< 40 msec.\",\"< 30000 msec.\",\"< 50000 msec.\" ];\n"
+	"	var headers = [ \"File size/Time\", %s ];\n"
 	"\n"
 	"	var table = document.createElement(\"table\");\n"
 	"	var tableThead = document.createElement(\"thead\");\n"
