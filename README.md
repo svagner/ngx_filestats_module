@@ -36,4 +36,6 @@ location /filestats {
 
 **filestats_time_interval** - like file size, but for column.
 
+For get statistics in json: http://yoursite/filestats?json
+
 ![Alt text](/img/screenshot-2013.12.10-17.19.07.png "Screenshot")
