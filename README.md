@@ -35,3 +35,5 @@ location /filestats {
 **filestats_file_size** - size intervals for get statistics. As example filestat: 0<1row<=5k, 5k<2row<=50k, 50k<3row<=500k, 500k<4row<...
 
 **filestats_time_interval** - like file size, but for column.
+
+![Alt text](/img/screenshot-2013.12.10-17.19.07.png "Screenshot")
